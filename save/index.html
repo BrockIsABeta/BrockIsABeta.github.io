@@ -123,13 +123,11 @@ body {
   font-size: 1.5rem;
   color: white;
 }
-
 h2 {
   text-align: center;
   margin: 20px 0;
   font-size: 1.5em;
 }
-
 .info-message {
   color: #ddd;
   text-align: center;
@@ -138,7 +136,6 @@ h2 {
   padding: 0 20px;
   font-size: 0.9rem;
 }
-
 .saves-container {
   display: flex;
   flex-direction: column;
@@ -148,7 +145,6 @@ h2 {
   max-width: 800px;
   margin: 0 auto;
 }
-
 .save-slot {
   background: #444;
   border-radius: 20px;
@@ -160,11 +156,9 @@ h2 {
   transition: 0.3s;
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
-
 .save-slot:hover {
   transform: scale(0.98);
 }
-
 .save-title {
   font-size: 1.2em;
   margin-bottom: 10px;
@@ -175,7 +169,6 @@ h2 {
   text-align: center;
   color: #ccc;
 }
-
 .delete-button {
   position: absolute;
   top: 10px;
@@ -194,7 +187,6 @@ h2 {
 .delete-button:hover {
   background: #f00;
 }
-
 .modal {
   display: none;
   position: fixed;
@@ -228,14 +220,12 @@ h2 {
 .modal-close:hover {
   color: #fff;
 }
-
 .modal-buttons {
   display: flex;
   gap: 10px;
   justify-content: center;
   margin-top: 20px;
 }
-
 .transfer-save-file-btn {
   border: none;
   padding: 1rem;
@@ -250,7 +240,6 @@ h2 {
   filter: brightness(0.9);
   transform: scale(1.05);
 }
-
 .bottom-buttons {
   display: flex;
   flex-direction: column;
@@ -258,14 +247,12 @@ h2 {
   align-items: center;
   margin-top: 30px;
 }
-
 .auto-save-container {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-top: 10px;
 }
-
 .switch {
   position: relative;
   display: inline-block;
@@ -304,6 +291,45 @@ input:checked + .slider {
 }
 input:checked + .slider:before {
   transform: translateX(26px);
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 3000;
+}
+.loading-animation {
+  display: flex;
+  gap: 8px;
+}
+.loading-bar {
+  width: 12px;
+  height: 40px;
+  background: orange;
+  animation: loadPulse 1s infinite ease-in-out;
+}
+.loading-bar:nth-child(2) { animation-delay: 0.1s; }
+.loading-bar:nth-child(3) { animation-delay: 0.2s; }
+.loading-bar:nth-child(4) { animation-delay: 0.3s; }
+.loading-bar:nth-child(5) { animation-delay: 0.4s; }
+@keyframes loadPulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(2); }
+}
+.loading-overlay.active {
+  display: flex;
+}
+#loadingText {
+  margin-top: 20px;
+  font-size: 1.3rem;
 }
 </style>
 </head>
@@ -345,692 +371,523 @@ input:checked + .slider:before {
 </div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { 
-      getAuth, 
-      onAuthStateChanged, 
-      signOut 
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { 
-      getFirestore, 
-      doc, 
-      getDoc, 
-      setDoc, 
-      deleteDoc, 
-      collection, 
-      getDocs 
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { 
-      getStorage, 
-      ref as storageRef, 
-      uploadString, 
-      getDownloadURL, 
-      deleteObject 
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-    
-    import { siteMapping } from "../site-mapping.js";
-    
-    const firebaseConfig = {
-      apiKey: "AIzaSyBh-VnGiP4qZD0r14gfn9dr77GwtslpTqU",
-      authDomain: "strongdog-auth.firebaseapp.com",
-      projectId: "strongdog-auth",
-      storageBucket: "strongdog-auth.appspot.com",
-      messagingSenderId: "936276282572",
-      appId: "1:936276282572:web:a802b7f609381ff9428669",
-      measurementId: "G-0YLTCV2MMS",
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const storage = getStorage(app);
-    
-    const menuIcon = document.getElementById("menuIcon");
-    const slideMenu = document.getElementById("slideMenu");
-    const categories = document.getElementById("sidebarCategories");
-    const savesContainer = document.getElementById("savesContainer");
-    const bottomButtonsContainer = document.getElementById("bottomButtonsContainer");
-    
-    const modal = document.getElementById("modalPrompt");
-    const modalClose = document.getElementById("modalClose");
-    const modalText = document.getElementById("modalText");
-    const modalButtons = document.getElementById("modalButtons");
-    
-    const loadingOverlay = document.getElementById("loadingOverlay");
-    const loadingText = document.getElementById("loadingText");
-    
-    let currentUser = null;
-    let userId = null;
-    let loadingTimeout = null;
-    
-    function setCookie(name, value, expires) {
-      document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
-    }
-    function getCookie(name) {
-      const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
-      return match ? match[2] : null;
-    }
-    
-    if (getCookie("autoSaveEnabled") === null) {
-      setCookie("autoSaveEnabled", "false", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
-    }
-    
-    function getCurrentSiteKey() {
-      const currentURL = window.location.href;
-      const keys = Object.keys(siteMapping);
-      keys.sort((a,b) => b.length - a.length);
-      for (const key of keys) {
-        const normalized = key.replace(/^https?:\/\//, "");
-        if (currentURL.includes(normalized)) return normalized;
-      }
-      return window.location.host + window.location.pathname.replace(/\/$/, "");
-    }
-    
-    const currentDomainKey = getCurrentSiteKey();
-    
-    menuIcon.addEventListener("click", e => {
-      e.stopPropagation();
-      slideMenu.style.transform = 
-        slideMenu.style.transform === "translateX(0%)"
-          ? "translateX(-100%)"
-          : "translateX(0%)";
-    });
-    
-    window.addEventListener("click", e => {
-      if (e.target !== menuIcon && !slideMenu.contains(e.target)) {
-        slideMenu.style.transform = "translateX(-100%)";
-      }
-    });
-    
-    function openModal(text, buttons = []) {
-      modalText.textContent = text;
-      modalButtons.innerHTML = "";
-      buttons.forEach(btn => {
-        const el = document.createElement("button");
-        el.classList.add("transfer-save-file-btn");
-        el.textContent = btn.text;
-        el.onclick = btn.onclick;
-        modalButtons.appendChild(el);
-      });
-      modal.style.display = "flex";
-    }
-    
-    modalClose.addEventListener("click", () => {
-      modal.style.display = "none";
-    });
-    window.addEventListener("click", e => {
-      if (e.target === modal) modal.style.display = "none";
-    });
-    
-    function showLoading(text="Loading...") {
-      loadingText.textContent = text;
-      loadingOverlay.classList.add("active");
-      loadingOverlay.style.display = "flex";
-    
-      if (loadingTimeout) clearTimeout(loadingTimeout);
-      loadingTimeout = setTimeout(hideLoading, 5000);
-    }
-    function hideLoading() {
-      if (loadingTimeout) {
-        clearTimeout(loadingTimeout);
-        loadingTimeout = null;
-      }
-      loadingOverlay.classList.remove("active");
-      loadingOverlay.style.display = "none";
-    }
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { siteMapping } from "../site-mapping.js";
 
-    function getAllLocalStorageData() {
-    const data = {};
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        data[key] = localStorage.getItem(key);
-    }
-    return data;
-    }
+const firebaseConfig = {
+  apiKey: "AIzaSyBh-VnGiP4qZD0r14gfn9dr77GwtslpTqU",
+  authDomain: "strongdog-auth.firebaseapp.com",
+  projectId: "strongdog-auth",
+  storageBucket: "strongdog-auth.appspot.com",
+  messagingSenderId: "936276282572",
+  appId: "1:936276282572:web:a802b7f609381ff9428669",
+  measurementId: "G-0YLTCV2MMS"
+};
 
-    function setAllLocalStorageData(data) {
-    localStorage.clear();
-    for (const [key, val] of Object.entries(data)) {
-        localStorage.setItem(key, val);
-    }
-    }
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
-    async function getAllIndexedDBData() {
-    if (!indexedDB.databases) return {};
+const menuIcon = document.getElementById("menuIcon");
+const slideMenu = document.getElementById("slideMenu");
+const categories = document.getElementById("sidebarCategories");
+const savesContainer = document.getElementById("savesContainer");
+const bottomButtonsContainer = document.getElementById("bottomButtonsContainer");
+const modal = document.getElementById("modalPrompt");
+const modalClose = document.getElementById("modalClose");
+const modalText = document.getElementById("modalText");
+const modalButtons = document.getElementById("modalButtons");
+const loadingOverlay = document.getElementById("loadingOverlay");
+const loadingText = document.getElementById("loadingText");
 
-    let dbList = [];
-    try {
-        dbList = await indexedDB.databases();
-    } catch (err) {
-        console.error("IndexedDB listing failed", err);
-        return {};
-    }
+let currentUser = null;
+let userId = null;
+let loadingTimeout = null;
 
-    const result = {};
+function setCookie(n, v, e) { document.cookie = n + "=" + v + ";expires=" + e.toUTCString() + ";path=/"; }
+function getCookie(n) { const m = document.cookie.match(new RegExp("(^| )" + n + "=([^;]+)")); return m ? m[2] : null; }
 
-    for (const dbInfo of dbList) {
-        if (!dbInfo.name) continue;
-        result[dbInfo.name] = await getDataFromDatabase(dbInfo.name);
-    }
-    return result;
-    }
+if (getCookie("autoSaveEnabled") === null) {
+  setCookie("autoSaveEnabled", "false", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
+}
 
-    function getDataFromDatabase(dbName) {
-    return new Promise(resolve => {
-        const req = indexedDB.open(dbName);
-        req.onerror = () => resolve({});
-        req.onsuccess = event => {
+function getCurrentSiteKey() {
+  const currentURL = window.location.href;
+  const keys = Object.keys(siteMapping);
+  keys.sort((a,b) => b.length - a.length);
+  for (const key of keys) {
+    const normalized = key.replace(/^https?:\/\//, "");
+    if (currentURL.includes(normalized)) return normalized;
+  }
+  return window.location.host + window.location.pathname.replace(/\/$/, "");
+}
+
+const currentDomainKey = getCurrentSiteKey();
+
+menuIcon.addEventListener("click", e => {
+  e.stopPropagation();
+  slideMenu.style.transform =
+    slideMenu.style.transform === "translateX(0%)"
+      ? "translateX(-100%)"
+      : "translateX(0%)";
+});
+
+window.addEventListener("click", e => {
+  if (e.target !== menuIcon && !slideMenu.contains(e.target)) {
+    slideMenu.style.transform = "translateX(-100%)";
+  }
+});
+
+function openModal(text, buttons = []) {
+  modalText.textContent = text;
+  modalButtons.innerHTML = "";
+  buttons.forEach(btn => {
+    const el = document.createElement("button");
+    el.classList.add("transfer-save-file-btn");
+    el.textContent = btn.text;
+    el.onclick = btn.onclick;
+    modalButtons.appendChild(el);
+  });
+  modal.style.display = "flex";
+}
+
+modalClose.addEventListener("click", () => {
+  modal.style.display = "none";
+});
+window.addEventListener("click", e => {
+  if (e.target === modal) modal.style.display = "none";
+});
+
+function showLoading(text="Loading...") {
+  loadingText.textContent = text;
+  loadingOverlay.classList.add("active");
+  if (loadingTimeout) clearTimeout(loadingTimeout);
+  loadingTimeout = setTimeout(hideLoading, 20000);
+}
+function hideLoading() {
+  if (loadingTimeout) {
+    clearTimeout(loadingTimeout);
+    loadingTimeout = null;
+  }
+  loadingOverlay.classList.remove("active");
+}
+
+function getAllLocalStorageData() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    data[key] = localStorage.getItem(key);
+  }
+  return data;
+}
+
+function setAllLocalStorageData(data) {
+  localStorage.clear();
+  for (const [k,v] of Object.entries(data)) {
+    localStorage.setItem(k, v);
+  }
+}
+
+async function getAllIndexedDBData() {
+  if (!indexedDB.databases) return {};
+  let dbList = [];
+  try { dbList = await indexedDB.databases(); } catch { return {}; }
+  const result = {};
+  for (const dbInfo of dbList) {
+    if (!dbInfo.name) continue;
+    result[dbInfo.name] = await new Promise(resolve => {
+      const req = indexedDB.open(dbInfo.name);
+      req.onerror = () => resolve({});
+      req.onsuccess = event => {
         const db = event.target.result;
         const stores = Array.from(db.objectStoreNames);
         const dbData = {};
         let pending = stores.length;
-
-        if (pending === 0) {
-            db.close();
-            return resolve({});
-        }
-
+        if (pending === 0) { db.close(); return resolve({}); }
         stores.forEach(storeName => {
-            const tx = db.transaction(storeName, "readonly");
-            const store = tx.objectStore(storeName);
-            const items = [];
-
-            const cursorReq = store.openCursor();
-            cursorReq.onerror = () => {
-            pending--;
-            if (pending === 0) { db.close(); resolve(dbData); }
-            };
-            cursorReq.onsuccess = evt => {
+          const tx = db.transaction(storeName, "readonly");
+          const store = tx.objectStore(storeName);
+          const items = [];
+          const cursorReq = store.openCursor();
+          cursorReq.onerror = () => { pending--; if (pending === 0) { db.close(); resolve(dbData); } };
+          cursorReq.onsuccess = evt => {
             const cursor = evt.target.result;
             if (cursor) {
-                items.push({ key: cursor.key, value: cursor.value });
-                cursor.continue();
+              items.push({ key: cursor.key, value: cursor.value });
+              cursor.continue();
             } else {
-                dbData[storeName] = items;
-                pending--;
-                if (pending === 0) {
-                db.close();
-                resolve(dbData);
-                }
+              dbData[storeName] = items;
+              pending--;
+              if (pending === 0) { db.close(); resolve(dbData); }
             }
-            };
+          };
         });
-        };
+      };
     });
-    }
+  }
+  return result;
+}
 
-    async function setAllIndexedDBData(indexData) {
-    for (const dbName in indexData) {
-        const stores = indexData[dbName];
-
-        await new Promise(res => {
-        const del = indexedDB.deleteDatabase(dbName);
-        del.onsuccess = del.onerror = del.onblocked = () => res();
-        });
-
-        const openReq = indexedDB.open(dbName, 1);
-        let dbInstance = await new Promise((resolve, reject) => {
-        openReq.onupgradeneeded = evt => {
-            const db = evt.target.result;
-            for (const storeName in stores) {
-            if (!db.objectStoreNames.contains(storeName)) {
-                db.createObjectStore(storeName);
-            }
-            }
+async function setAllIndexedDBData(indexData) {
+  for (const dbName in indexData) {
+    const stores = indexData[dbName];
+    await new Promise(res => {
+      const del = indexedDB.deleteDatabase(dbName);
+      del.onsuccess = del.onerror = del.onblocked = () => res();
+    });
+    const openReq = indexedDB.open(dbName, 1);
+    let dbInstance = await new Promise((resolve, reject) => {
+      openReq.onupgradeneeded = evt => {
+        const db = evt.target.result;
+        for (const s in stores) {
+          if (!db.objectStoreNames.contains(s)) {
+            db.createObjectStore(s);
+          }
+        }
+      };
+      openReq.onsuccess = evt => resolve(evt.target.result);
+      openReq.onerror = evt => reject(evt.target.error);
+    });
+    for (const storeName in stores) {
+      await new Promise(res => {
+        const tx = dbInstance.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        store.clear().onsuccess = async () => {
+          for (const record of stores[storeName]) {
+            await new Promise(r => {
+              const putReq = store.put(record.value, record.key);
+              putReq.onsuccess = putReq.onerror = () => r();
+            });
+          }
+          res();
         };
-        openReq.onsuccess = evt => resolve(evt.target.result);
-        openReq.onerror = evt => reject(evt.target.error);
-        });
-
-        for (const storeName in stores) {
-        await new Promise(res => {
-            const tx = dbInstance.transaction(storeName, "readwrite");
-            const store = tx.objectStore(storeName);
-            store.clear().onsuccess = async () => {
-            for (const record of stores[storeName]) {
-                await new Promise(r => {
-                const putReq = store.put(record.value, record.key);
-                putReq.onsuccess = putReq.onerror = () => r();
-                });
-            }
-            res();
-            };
-        });
-        }
-
-        dbInstance.close();
-    }
-    }
-
-    function normalizeDomainKey(str) {
-    return str.replace(/^https?:\/\//, "").replace(/\/$/, "");
-    }
-
-    function replaceDomainsInData(dataObj, currentDomain) {
-    const keysToCheck = Object.keys(siteMapping).map(k => normalizeDomainKey(k));
-    const normalizedCurrent = normalizeDomainKey(currentDomain);
-
-    function replaceString(s) {
-        for (const oldDomain of keysToCheck) {
-        if (s.includes(oldDomain)) {
-            const idx = s.indexOf(oldDomain);
-            if (idx === 0) {
-            return normalizedCurrent + s.substring(oldDomain.length);
-            } else {
-            return s.replace(oldDomain, normalizedCurrent);
-            }
-        }
-        }
-        return s;
-    }
-
-    for (const slotId in dataObj) {
-        const save = dataObj[slotId];
-
-        if (!save || !save.localStorageData) continue;
-
-        const ls = save.localStorageData.localStorageBackup || {};
-
-        for (const key in ls) {
-        const newKey = replaceString(key);
-        let val = ls[key];
-        if (typeof val === "string") val = replaceString(val);
-
-        if (newKey !== key) {
-            delete ls[key];
-            ls[newKey] = val;
-        } else {
-            ls[key] = val;
-        }
-        }
-    }
-    }
-    async function saveSlotToFirebase(slotId, title, description, saveData) {
-      if (!currentUser) return;
-    
-      const jsonString = JSON.stringify(saveData);
-    
-      const fileRef = storageRef(
-        storage,
-        `users/${userId}/saves/${slotId}.json`
-      );
-    
-      await uploadString(fileRef, jsonString);
-    
-      const metaRef = doc(db, "users", userId, "saves", slotId);
-      await setDoc(metaRef, {
-        title,
-        description,
-        path: `users/${userId}/saves/${slotId}.json`,
-        timestamp: Date.now()
       });
     }
-    
-    async function loadSlotFromFirebase(slotId) {
-      if (!currentUser) return null;
-    
-      const metaRef = doc(db, "users", userId, "saves", slotId);
-      const snapshot = await getDoc(metaRef);
-    
-      if (!snapshot.exists()) return null;
-    
-      const data = snapshot.data();
-      const path = data.path;
-    
-      const fileRef = storageRef(storage, path);
-      const url = await getDownloadURL(fileRef);
-    
-      const response = await fetch(url);
-      const json = await response.json();
-    
-      return json;
-    }
-    
-    async function deleteSaveFromFirebase(slotId) {
-      if (!currentUser) return;
-    
-      const metaRef = doc(db, "users", userId, "saves", slotId);
-      const snapshot = await getDoc(metaRef);
-    
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.path) {
-          const fileRef = storageRef(storage, data.path);
-          await deleteObject(fileRef).catch(() => {});
-        }
+    dbInstance.close();
+  }
+}
+
+function normalizeDomainKey(s) {
+  return s.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function replaceDomainsInData(dataObj, currentDomain) {
+  const keysToCheck = Object.keys(siteMapping).map(k => normalizeDomainKey(k));
+  const normalizedCurrent = normalizeDomainKey(currentDomain);
+  function replaceString(s) {
+    for (const oldDomain of keysToCheck) {
+      if (s.includes(oldDomain)) {
+        const idx = s.indexOf(oldDomain);
+        if (idx === 0) return normalizedCurrent + s.substring(oldDomain.length);
+        else return s.replace(oldDomain, normalizedCurrent);
       }
-    
-      await deleteDoc(metaRef);
     }
-    
-    async function handleLoadSave(slotId) {
-      showLoading("Loading save...");
-    
-      try {
-        const data = await loadSlotFromFirebase(slotId);
-        if (!data) {
-          alert("Save not found.");
-          return;
-        }
-    
-        const temp = { slot: { localStorageData: data.localStorageBackup } };
-        replaceDomainsInData(temp, currentDomainKey);
-    
-        if (data.localStorageBackup) {
-          setAllLocalStorageData(data.localStorageBackup);
-        }
-        if (data.indexedDBBackup) {
-          await setAllIndexedDBData(data.indexedDBBackup);
-        }
-    
-        alert("Load complete!");
-      } catch (err) {
-        console.error(err);
-        alert("Error loading save.");
-      } finally {
+    return s;
+  }
+  for (const slotId in dataObj) {
+    const save = dataObj[slotId];
+    if (!save || !save.localStorageData) continue;
+    const ls = save.localStorageData.localStorageBackup || {};
+    for (const key in ls) {
+      const newKey = replaceString(key);
+      let val = ls[key];
+      if (typeof val === "string") val = replaceString(val);
+      if (newKey !== key) {
+        delete ls[key];
+        ls[newKey] = val;
+      } else {
+        ls[key] = val;
+      }
+    }
+  }
+}
+
+async function saveSlotToFirebase(slotId, title, description, saveData) {
+  if (!currentUser) return;
+  const jsonString = JSON.stringify(saveData);
+  const fileRef = storageRef(storage, `users/${userId}/saves/${slotId}.json`);
+  await uploadString(fileRef, jsonString);
+  const metaRef = doc(db, "users", userId, "saves", slotId);
+  await setDoc(metaRef, {
+    title,
+    description,
+    path: `users/${userId}/saves/${slotId}.json`,
+    timestamp: Date.now()
+  });
+}
+
+async function loadSlotFromFirebase(slotId) {
+  if (!currentUser) return null;
+  const metaRef = doc(db, "users", userId, "saves", slotId);
+  const snapshot = await getDoc(metaRef);
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  const fileRef = storageRef(storage, data.path);
+  const url = await getDownloadURL(fileRef);
+  const response = await fetch(url);
+  return await response.json();
+}
+
+async function deleteSaveFromFirebase(slotId) {
+  if (!currentUser) return;
+  const metaRef = doc(db, "users", userId, "saves", slotId);
+  const snapshot = await getDoc(metaRef);
+  if (snapshot.exists()) {
+    const data = snapshot.data();
+    if (data.path) {
+      const fileRef = storageRef(storage, data.path);
+      await deleteObject(fileRef).catch(() => {});
+    }
+  }
+  await deleteDoc(metaRef);
+}
+
+async function handleLoadSave(slotId) {
+  showLoading("Loading save...");
+  try {
+    const data = await loadSlotFromFirebase(slotId);
+    if (!data) {
+      hideLoading();
+      alert("Save not found.");
+      return;
+    }
+    const temp = { slot: { localStorageData: data.localStorageBackup } };
+    replaceDomainsInData(temp, currentDomainKey);
+    if (data.localStorageBackup) {
+      setAllLocalStorageData(data.localStorageBackup);
+    }
+    if (data.indexedDBBackup) {
+      await setAllIndexedDBData(data.indexedDBBackup);
+    }
+    hideLoading();
+    alert("Load complete!");
+    location.reload();
+  } catch {
+    hideLoading();
+    alert("Error loading save.");
+  }
+}
+
+function renderSlots(slotsData) {
+  savesContainer.innerHTML = "";
+  for (let i = 1; i <= 3; i++) {
+    const slotKey = `slot${i}`;
+    const slotData = slotsData[slotKey];
+    const slotEl = document.createElement("div");
+    slotEl.className = "save-slot";
+    slotEl.dataset.slot = slotKey;
+    let titleText = "Empty Slot";
+    let descText = "Click here to save your progress";
+    if (slotData) {
+      titleText = slotData.title;
+      descText = slotData.description;
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "delete-button";
+      deleteBtn.textContent = "X";
+      deleteBtn.onclick = e => {
+        e.stopPropagation();
+        openModal("Are you sure you want to delete this save?", [
+          {
+            text: "Yes",
+            onclick: async () => {
+              modal.style.display = "none";
+              showLoading("Deleting...");
+              await deleteSaveFromFirebase(slotKey);
+              await loadUserSaves();
+              hideLoading();
+            }
+          },
+          {
+            text: "No",
+            onclick: () => modal.style.display = "none"
+          }
+        ]);
+      };
+      slotEl.appendChild(deleteBtn);
+    }
+    const titleEl = document.createElement("div");
+    titleEl.className = "save-title";
+    titleEl.textContent = titleText;
+    const descEl = document.createElement("div");
+    descEl.className = "save-description";
+    descEl.textContent = descText;
+    slotEl.appendChild(titleEl);
+    slotEl.appendChild(descEl);
+    slotEl.addEventListener("click", async () => {
+      if (!slotData) {
+        const title = prompt("Enter a title for your save:", "");
+        if (title === null) return;
+        const description = prompt("Enter a description for your save:", "");
+        if (description === null) return;
+        showLoading("Saving...");
+        const saveObj = {
+          localStorageBackup: getAllLocalStorageData(),
+          indexedDBBackup: await getAllIndexedDBData()
+        };
+        await saveSlotToFirebase(slotKey, title, description, saveObj);
+        await loadUserSaves();
         hideLoading();
-      }
-    }
-    function renderSlots(slotsData) {
-      savesContainer.innerHTML = "";
-    
-      for (let i = 1; i <= 3; i++) {
-        const slotKey = `slot${i}`;
-        const slotData = slotsData[slotKey];
-    
-        const slotEl = document.createElement("div");
-        slotEl.className = "save-slot";
-        slotEl.dataset.slot = slotKey;
-    
-        let titleText = "Empty Slot";
-        let descText = "Click here to save your progress";
-    
-        if (slotData) {
-          titleText = slotData.title;
-          descText = slotData.description;
-    
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "delete-button";
-          deleteBtn.textContent = "X";
-          deleteBtn.onclick = e => {
-            e.stopPropagation();
-    
-            openModal(
-              "Are you sure you want to delete this save? This cannot be undone.",
-              [
+        alert("Save complete!");
+      } else {
+        openModal("What would you like to do?", [
+          {
+            text: "Load Save",
+            onclick: () => {
+              modal.style.display = "none";
+              openModal("Load this save?", [
                 {
                   text: "Yes",
                   onclick: async () => {
                     modal.style.display = "none";
-                    showLoading("Deleting save...");
-                    await deleteSaveFromFirebase(slotKey);
-                    await loadUserSaves();
-                    hideLoading();
+                    await handleLoadSave(slotKey);
                   }
                 },
+                { text: "No", onclick: () => modal.style.display = "none" }
+              ]);
+            }
+          },
+          {
+            text: "Overwrite Save",
+            onclick: () => {
+              modal.style.display = "none";
+              openModal("Overwrite this save?", [
                 {
-                  text: "No",
-                  onclick: () => (modal.style.display = "none")
-                }
-              ]
-            );
-          };
-          slotEl.appendChild(deleteBtn);
-        }
-    
-        const titleEl = document.createElement("div");
-        titleEl.className = "save-title";
-        titleEl.textContent = titleText;
-    
-        const descEl = document.createElement("div");
-        descEl.className = "save-description";
-        descEl.textContent = descText;
-    
-        slotEl.appendChild(titleEl);
-        slotEl.appendChild(descEl);
-    
-        slotEl.addEventListener("click", async () => {
-          if (!slotData) {
-            const title = prompt("Enter a title for your save:", "");
-            if (title === null) return;
-    
-            const description = prompt("Enter a description for your save:", "");
-            if (description === null) return;
-    
-            showLoading("Saving your data...");
-    
-            const saveObj = {
-              localStorageBackup: getAllLocalStorageData(),
-              indexedDBBackup: await getAllIndexedDBData()
-            };
-    
-            await saveSlotToFirebase(slotKey, title, description, saveObj);
-            await loadUserSaves();
-    
+                  text: "Yes",
+                  onclick: async () => {
+                    modal.style.display = "none";
+                    showLoading("Overwriting...");
+                    const saveObj = {
+                      localStorageBackup: getAllLocalStorageData(),
+                      indexedDBBackup: await getAllIndexedDBData()
+                    };
+                    await saveSlotToFirebase(slotKey, slotData.title, slotData.description, saveObj);
+                    await loadUserSaves();
+                    hideLoading();
+                    alert("Overwrite complete!");
+                  }
+                },
+                { text: "No", onclick: () => modal.style.display = "none" }
+              ]);
+            }
+          }
+        ]);
+      }
+    });
+    savesContainer.appendChild(slotEl);
+  }
+}
+
+async function loadUserSaves() {
+  if (!currentUser) {
+    savesContainer.style.display = "none";
+    return;
+  }
+  savesContainer.style.display = "flex";
+  const coll = collection(db, "users", userId, "saves");
+  const snap = await getDocs(coll);
+  const slotsData = {};
+  snap.forEach(docSnap => slotsData[docSnap.id] = docSnap.data());
+  renderSlots(slotsData);
+}
+
+async function downloadAllSaves() {
+  showLoading("Backing up...");
+  const saveObj = {
+    localStorageBackup: getAllLocalStorageData(),
+    indexedDBBackup: await getAllIndexedDBData()
+  };
+  hideLoading();
+  const blob = new Blob([JSON.stringify(saveObj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "strongdog_saves.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function handleFileUpload() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async evt => {
+      let parsed;
+      try { parsed = JSON.parse(evt.target.result); }
+      catch { alert("Invalid save file."); return; }
+      openModal("Upload this save file?", [
+        {
+          text: "Yes",
+          onclick: async () => {
+            modal.style.display = "none";
+            showLoading("Uploading...");
+            localStorage.clear();
+            if (parsed.localStorageBackup) setAllLocalStorageData(parsed.localStorageBackup);
+            if (parsed.indexedDBBackup) await setAllIndexedDBData(parsed.indexedDBBackup);
             hideLoading();
-            alert("Save complete!");
-          } else {
-            openModal("What would you like to do?", [
-              {
-                text: "Load Save",
-                onclick: () => {
-                  modal.style.display = "none";
-                  openModal(
-                    "Load this save? Unsaved changes will be lost.",
-                    [
-                      {
-                        text: "Yes",
-                        onclick: async () => {
-                          modal.style.display = "none";
-                          await handleLoadSave(slotKey);
-                        }
-                      },
-                      {
-                        text: "No",
-                        onclick: () => (modal.style.display = "none")
-                      }
-                    ]
-                  );
-                }
-              },
-              {
-                text: "Overwrite Save",
-                onclick: () => {
-                  modal.style.display = "none";
-                  openModal(
-                    "Overwrite this save? This action is irreversible.",
-                    [
-                      {
-                        text: "Yes",
-                        onclick: async () => {
-                          modal.style.display = "none";
-                          showLoading("Overwriting save...");
-    
-                          const saveObj = {
-                            localStorageBackup: getAllLocalStorageData(),
-                            indexedDBBackup: await getAllIndexedDBData()
-                          };
-    
-                          await saveSlotToFirebase(slotKey, slotData.title, slotData.description, saveObj);
-                          await loadUserSaves();
-    
-                          hideLoading();
-                          alert("Overwrite complete!");
-                        }
-                      },
-                      {
-                        text: "No",
-                        onclick: () => (modal.style.display = "none")
-                      }
-                    ]
-                  );
-                }
-              }
-            ]);
+            alert("Upload complete!");
+            location.reload();
           }
-        });
-    
-        savesContainer.appendChild(slotEl);
-      }
-    }
-    
-    async function loadUserSaves() {
-      if (!currentUser) {
-        savesContainer.style.display = "none";
-        return;
-      }
-    
-      savesContainer.style.display = "flex";
-    
-      const coll = collection(db, "users", userId, "saves");
-      const snap = await getDocs(coll);
-    
-      const slotsData = {};
-      snap.forEach(docSnap => (slotsData[docSnap.id] = docSnap.data()));
-    
-      renderSlots(slotsData);
-    }
-    
-    async function downloadAllSaves() {
-      showLoading("Preparing local backup...");
-    
-      const saveObj = {
-        localStorageBackup: getAllLocalStorageData(),
-        indexedDBBackup: await getAllIndexedDBData()
-      };
-    
-      hideLoading();
-    
-      const blob = new Blob([JSON.stringify(saveObj, null, 2)], {
-        type: "application/json"
-      });
-    
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "strongdog_saves.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-    
-    function handleFileUpload() {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".json";
-    
-      input.onchange = async e => {
-        const file = e.target.files[0];
-        if (!file) return;
-    
-        const reader = new FileReader();
-        reader.onload = async evt => {
-          let parsed;
-    
-          try {
-            parsed = JSON.parse(evt.target.result);
-          } catch {
-            alert("Invalid save file.");
-            return;
-          }
-    
-          openModal(
-            "Upload this save file? This will overwrite current StrongDog data.",
-            [
-              {
-                text: "Yes",
-                onclick: async () => {
-                  modal.style.display = "none";
-                  showLoading("Uploading save...");
-    
-                  localStorage.clear();
-    
-                  if (parsed.localStorageBackup) {
-                    setAllLocalStorageData(parsed.localStorageBackup);
-                  }
-                  if (parsed.indexedDBBackup) {
-                    await setAllIndexedDBData(parsed.indexedDBBackup);
-                  }
-    
-                  hideLoading();
-                  alert("Save upload complete!");
-                }
-              },
-              {
-                text: "No",
-                onclick: () => (modal.style.display = "none")
-              }
-            ]
-          );
-        };
-    
-        reader.readAsText(file);
-      };
-    
-      input.click();
-    }
-    
-    async function autoSaveData() {
-      if (!currentUser) return;
-    
-      const saveObj = {
-        localStorageBackup: getAllLocalStorageData(),
-        indexedDBBackup: await getAllIndexedDBData()
-      };
-    
-      await saveSlotToFirebase(
-        "slot3",
-        "Auto Save",
-        "Auto-saved on " + new Date().toLocaleString(),
-        saveObj
-      );
-    }
+        },
+        { text: "No", onclick: () => modal.style.display = "none" }
+      ]);
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+async function autoSaveData() {
+  if (!currentUser) return;
+  const saveObj = {
+    localStorageBackup: getAllLocalStorageData(),
+    indexedDBBackup: await getAllIndexedDBData()
+  };
+  await saveSlotToFirebase(
+    "slot3",
+    "Auto Save",
+    "Auto-saved on " + new Date().toLocaleString(),
+    saveObj
+  );
+}
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   categories.innerHTML = "";
   bottomButtonsContainer.innerHTML = "";
-
   if (user) {
     userId = user.uid;
-
     const userDetailsContainer = document.createElement("div");
     userDetailsContainer.className = "user-details-container";
-
     const profileTopContainer = document.createElement("div");
     profileTopContainer.className = "profile-top-container";
-
     const profilePictureContainer = document.createElement("div");
     profilePictureContainer.className = "profile-picture-container";
-
     const profilePictureElement = document.createElement("img");
     profilePictureElement.className = "profile-picture";
     profilePictureElement.src = user.photoURL || "../img/default-avatar.png";
-
     profilePictureContainer.appendChild(profilePictureElement);
-    profilePictureContainer.onclick = () => {
-      window.location.href = "../settings.html";
-    };
-
+    profilePictureContainer.onclick = () => { window.location.href = "../settings.html"; };
     const usernameContainer = document.createElement("div");
     usernameContainer.className = "username-container";
-
     const usernameElement = document.createElement("p");
     usernameElement.className = "username-text";
-
     const userDoc = await getDoc(doc(db, "usernames", userId));
-    usernameElement.textContent = userDoc.exists()
-      ? userDoc.data().username || "Username"
-      : user.displayName || "Username";
-
+    usernameElement.textContent =
+      userDoc.exists() ? userDoc.data().username || "Username" : user.displayName || "Username";
     usernameContainer.appendChild(usernameElement);
-
     profileTopContainer.appendChild(profilePictureContainer);
     profileTopContainer.appendChild(usernameContainer);
-
     userDetailsContainer.appendChild(profileTopContainer);
-
     slideMenu.insertBefore(userDetailsContainer, categories);
 
     const logoutLink = document.createElement("a");
@@ -1038,14 +895,10 @@ onAuthStateChanged(auth, async user => {
     logoutLink.textContent = "Log Out";
     logoutLink.style.backgroundColor = "#dc3545";
     logoutLink.style.color = "white";
-
     logoutLink.onclick = e => {
       e.preventDefault();
-      signOut(auth)
-        .then(() => window.location.reload())
-        .catch(err => console.error("Error signing out:", err));
+      signOut(auth).then(() => window.location.reload());
     };
-
     categories.appendChild(logoutLink);
 
     const downloadButton = document.createElement("button");
@@ -1061,21 +914,16 @@ onAuthStateChanged(auth, async user => {
 
     const autoSaveContainer = document.createElement("div");
     autoSaveContainer.className = "auto-save-container";
-
     const autoSaveLabel = document.createElement("span");
     autoSaveLabel.id = "autoSaveLabel";
     autoSaveLabel.textContent =
-      "Auto Save is " +
-      (getCookie("autoSaveEnabled") === "true" ? "Enabled" : "Disabled");
-
+      "Auto Save is " + (getCookie("autoSaveEnabled") === "true" ? "Enabled" : "Disabled");
     const autoSaveToggleWrapper = document.createElement("label");
     autoSaveToggleWrapper.className = "switch";
-
     const autoSaveToggleInput = document.createElement("input");
     autoSaveToggleInput.type = "checkbox";
     autoSaveToggleInput.id = "toggleAutoSave";
     autoSaveToggleInput.checked = getCookie("autoSaveEnabled") === "true";
-
     const autoSaveToggleSpan = document.createElement("span");
     autoSaveToggleSpan.className = "slider";
 
@@ -1090,71 +938,58 @@ onAuthStateChanged(auth, async user => {
     autoSaveToggleInput.onchange = () => {
       const newState = autoSaveToggleInput.checked;
       const currentState = getCookie("autoSaveEnabled") === "true";
-
       if (newState && !currentState) {
-        openModal(
-          "Enabling auto-save will overwrite your previous auto-save. Proceed?",
-          [
-            {
-              text: "Yes",
-              onclick: async () => {
-                modal.style.display = "none";
-                setCookie("autoSaveEnabled", "true", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
-
-                await autoSaveData();
-                autoSaveLabel.textContent = "Auto Save is Enabled";
-                alert("Auto-save enabled and saved.");
-              }
-            },
-            {
-              text: "No",
-              onclick: () => {
-                modal.style.display = "none";
-                autoSaveToggleInput.checked = false;
-              }
+        openModal("Enable auto-save?", [
+          {
+            text: "Yes",
+            onclick: async () => {
+              modal.style.display = "none";
+              setCookie("autoSaveEnabled", "true", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
+              await autoSaveData();
+              autoSaveLabel.textContent = "Auto Save is Enabled";
+              alert("Auto-save enabled.");
             }
-          ]
-        );
+          },
+          {
+            text: "No",
+            onclick: () => {
+              modal.style.display = "none";
+              autoSaveToggleInput.checked = false;
+            }
+          }
+        ]);
       } else if (!newState && currentState) {
-        openModal(
-          "Disable auto-save? You must save manually in the future.",
-          [
-            {
-              text: "Yes",
-              onclick: () => {
-                modal.style.display = "none";
-                setCookie("autoSaveEnabled", "false", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
-                autoSaveLabel.textContent = "Auto Save is Disabled";
-                alert("Auto-save disabled.");
-              }
-            },
-            {
-              text: "No",
-              onclick: () => {
-                modal.style.display = "none";
-                autoSaveToggleInput.checked = true;
-              }
+        openModal("Disable auto-save?", [
+          {
+            text: "Yes",
+            onclick: () => {
+              modal.style.display = "none";
+              setCookie("autoSaveEnabled", "false", new Date("Fri, 31 Dec 9999 23:59:59 GMT"));
+              autoSaveLabel.textContent = "Auto Save is Disabled";
+              alert("Auto-save disabled.");
             }
-          ]
-        );
+          },
+          {
+            text: "No",
+            onclick: () => {
+              modal.style.display = "none";
+              autoSaveToggleInput.checked = true;
+            }
+          }
+        ]);
       }
     };
 
     await loadUserSaves();
-
   } else {
     userId = null;
-
     const userDetailsContainer = document.createElement("div");
     userDetailsContainer.className = "user-details-container";
-
     const notLoggedInContainer = document.createElement("div");
     notLoggedInContainer.className = "username-container";
-
     const notLoggedInText = document.createElement("p");
     notLoggedInText.className = "username-text";
     notLoggedInText.textContent = "Not logged in";
-
     const loginButton = document.createElement("button");
     loginButton.textContent = "Log In";
     loginButton.style.backgroundColor = "#007bff";
@@ -1163,27 +998,20 @@ onAuthStateChanged(auth, async user => {
     loginButton.style.borderRadius = "5px";
     loginButton.style.cursor = "pointer";
     loginButton.onclick = () => window.location.href = "../login.html";
-
     notLoggedInContainer.appendChild(notLoggedInText);
     userDetailsContainer.appendChild(notLoggedInContainer);
     userDetailsContainer.appendChild(loginButton);
-
     slideMenu.insertBefore(userDetailsContainer, categories);
 
     const downloadButton = document.createElement("button");
     downloadButton.textContent = "Download save file";
     downloadButton.onclick = async () => {
       alert("Not logged in — downloading ONLY local data.");
-
-      showLoading("Preparing download...");
-      const saveObj = {
-        localStorageBackup: getAllLocalStorageData()
-      };
+      showLoading("Preparing...");
+      const saveObj = { localStorageBackup: getAllLocalStorageData() };
       hideLoading();
-
       const blob = new Blob([JSON.stringify(saveObj, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = "strongdog_saves.json";
@@ -1204,6 +1032,7 @@ onAuthStateChanged(auth, async user => {
   }
 });
 </script>
+
 <script src="../js/panicButton.js"></script>
 </body>
 </html>
