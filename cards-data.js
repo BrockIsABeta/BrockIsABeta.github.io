@@ -293,8 +293,6 @@ export default [
   { href: './swf/strike force heros/index.html', imgSrc: 'strike force heros.jpg', name: 'strike force heros' , 'page': 3, 'id': 794 },
   { href: './swf/renegade racing/index.html', imgSrc: 'renegade racing.jpg', name: 'renegade racing' , 'page': 3, 'id': 791 },
   { href: './html/galaga/index.html', imgSrc: 'galaga.png', name: 'galaga' , 'page': 3, 'id': 775 },
-  { href: './swf/acid bunny 2/index.html', imgSrc: 'acid bunny 2.jpg', name: 'acid bunny 2' , 'page': 3, 'id': 778 },
-  { href: './swf/acid bunny/index.html', imgSrc: 'acid bunny.jpg', name: 'acid bunny' , 'page': 3, 'id': 779 },
   { href: './swf/bridge tactics/index.html', imgSrc: 'bridge tactics.jpg', name: 'bridge tactics' , 'page': 3, 'id': 782 },
   { href: './swf/cursed winds/index.html', imgSrc: 'cursed winds.jpg', name: 'cursed winds' , 'page': 3, 'id': 783 },
   { href: './swf/eco ego/index.html', imgSrc: 'eco ego.jpg', name: 'eco ego' , 'page': 3, 'id': 785 },
